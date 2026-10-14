@@ -1,0 +1,9 @@
+# Local runtime secrets
+.env
+.env.*
+!.env.example
+
+# Docker and local artifacts
+.DS_Store
+*.log
+*.tgz

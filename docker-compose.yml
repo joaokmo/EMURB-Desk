@@ -1,0 +1,67 @@
+services:
+  db:
+    image: mariadb:10.11
+    restart: unless-stopped
+    stop_grace_period: 1m
+    env_file:
+      - .env
+    environment:
+      MARIADB_DATABASE: ${MARIADB_DATABASE:?MARIADB_DATABASE is required}
+      MARIADB_USER: ${MARIADB_USER:?MARIADB_USER is required}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:?MARIADB_PASSWORD is required}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?MARIADB_ROOT_PASSWORD is required}
+    volumes:
+      - dbdata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  web:
+    image: emurb-glpi:12.0.0
+    build:
+      context: .
+      dockerfile: Dockerfile
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    ports:
+      - "${GLPI_HTTP_PORT:-8080}:80"
+    volumes:
+      - glpi_config:/var/www/glpi/config
+      - glpi_files:/var/www/glpi/files
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "php -r \"exit((bool) @fsockopen('127.0.0.1', 80));\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  cron:
+    image: emurb-glpi:12.0.0
+    init: true
+    user: "33:33"
+    restart: unless-stopped
+    stop_grace_period: 30s
+    command: ["sh", "-c", "while true; do php /var/www/glpi/front/cron.php || true; sleep 60; done"]
+    volumes:
+      - glpi_config:/var/www/glpi/config
+      - glpi_files:/var/www/glpi/files
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+
+volumes:
+  dbdata:
+    name: teste-emurb_dbdata
+  glpi_config:
+    name: teste-emurb_glpi_config
+  glpi_files:
+    name: teste-emurb_glpi_files
